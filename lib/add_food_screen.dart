@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'models/food_category_data.dart';
 import 'models/food_item.dart';
 
 class AddFoodScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
   final caloriesController = TextEditingController();
 
   String baseUnit = '100g';
+  String selectedCategory = 'Ostalo';
 
   @override
   void initState() {
@@ -26,11 +28,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     if (widget.existingFood != null) {
       final food = widget.existingFood!;
       nameController.text = food.name;
-      proteinController.text = food.protein.toString();
-      carbsController.text = food.carbs.toString();
-      fatController.text = food.fat.toString();
-      caloriesController.text = food.calories.toString();
+      proteinController.text = _formatNumber(food.protein);
+      carbsController.text = _formatNumber(food.carbs);
+      fatController.text = _formatNumber(food.fat);
+      caloriesController.text = _formatNumber(food.calories);
       baseUnit = food.baseUnit;
+      selectedCategory = food.category;
     }
   }
 
@@ -48,16 +51,53 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     return DateTime.now().microsecondsSinceEpoch.toString();
   }
 
+  String _formatNumber(double value) {
+    if (value == value.toInt()) {
+      return value.toInt().toString();
+    }
+    return value.toString();
+  }
+
+  double? _parseRequiredNumber(String value) {
+    final cleaned = value.trim().replaceAll(',', '.');
+    if (cleaned.isEmpty) return null;
+    return double.tryParse(cleaned);
+  }
+
   void saveFood() {
     final name = nameController.text.trim();
-    final protein = double.tryParse(proteinController.text.trim()) ?? 0;
-    final carbs = double.tryParse(carbsController.text.trim()) ?? 0;
-    final fat = double.tryParse(fatController.text.trim()) ?? 0;
-    final calories = double.tryParse(caloriesController.text.trim()) ?? 0;
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Upiši naziv namirnice.')),
+      );
+      return;
+    }
+
+    final protein = _parseRequiredNumber(proteinController.text);
+    final carbs = _parseRequiredNumber(carbsController.text);
+    final fat = _parseRequiredNumber(fatController.text);
+    final calories = _parseRequiredNumber(caloriesController.text);
+
+    if (protein == null ||
+        carbs == null ||
+        fat == null ||
+        calories == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unesi sve makronutrijente i kalorije prije spremanja.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (protein < 0 || carbs < 0 || fat < 0 || calories < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vrijednosti ne mogu biti negativne.'),
+        ),
       );
       return;
     }
@@ -70,6 +110,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       fat: fat,
       calories: calories,
       baseUnit: baseUnit,
+      category: selectedCategory,
     );
 
     Navigator.pop(context, newFood);
@@ -95,11 +136,33 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: selectedCategory,
+              decoration: const InputDecoration(
+                labelText: 'Kategorija',
+                border: OutlineInputBorder(),
+              ),
+              items: predefinedFoodCategories
+                  .map(
+                    (category) => DropdownMenuItem(
+                  value: category.name,
+                  child: Text(category.name),
+                ),
+              )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedCategory = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: proteinController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Proteini',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -109,6 +172,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'UH',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -118,6 +182,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Masti',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -127,6 +192,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Kalorije',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -141,6 +207,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                 DropdownMenuItem(value: '100g', child: Text('100g')),
                 DropdownMenuItem(value: 'kom', child: Text('kom')),
                 DropdownMenuItem(value: 'mjerica', child: Text('mjerica')),
+                DropdownMenuItem(value: '100ml', child: Text('100ml')),
+                DropdownMenuItem(value: 'porcija', child: Text('porcija')),
               ],
               onChanged: (value) {
                 setState(() {

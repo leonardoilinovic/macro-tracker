@@ -247,26 +247,118 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> addMealToToday(MealTemplate meal) async {
+  double _parseBaseUnit(String baseUnit) {
+    final digits = RegExp(r'(\d+)').firstMatch(baseUnit);
+    if (digits != null) {
+      return double.tryParse(digits.group(1)!) ?? 100;
+    }
+
+    if (baseUnit == 'kom' || baseUnit == 'mjerica' || baseUnit == 'porcija') {
+      return 1;
+    }
+
+    return 100;
+  }
+
+  void addMealToToday(MealTemplate meal) async {
     final selectedDateString = formatDate(selectedDate);
 
-    final entriesToAdd = meal.items.map((item) {
-      return DailyFoodEntry(
-        id: DateTime.now().microsecondsSinceEpoch.toString() +
-            item.food.id +
-            item.amount.toString(),
-        food: item.food,
-        amount: item.amount,
-        date: selectedDateString,
-      );
+    final mealFood = FoodItem(
+      id: 'meal_${meal.id}',
+      name: meal.name,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
+      calories: meal.calories,
+      baseUnit: 'porcija',
+      category: 'Ostalo',
+    );
+
+    final mealItems = meal.items.map((item) {
+      final base = _parseBaseUnit(item.food.baseUnit);
+
+      final itemProtein = item.food.protein * item.amount / base;
+      final itemCarbs = item.food.carbs * item.amount / base;
+      final itemFat = item.food.fat * item.amount / base;
+      final itemCalories = item.food.calories * item.amount / base;
+
+      return {
+        'name': item.food.name,
+        'amount': item.amount,
+        'baseUnit': item.food.baseUnit,
+        'protein': itemProtein,
+        'carbs': itemCarbs,
+        'fat': itemFat,
+        'calories': itemCalories,
+      };
     }).toList();
 
+    final entry = DailyFoodEntry(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      food: mealFood,
+      amount: 1,
+      date: selectedDateString,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
+      calories: meal.calories,
+      isMeal: true,
+      mealName: meal.name,
+      mealItems: mealItems,
+    );
+
     setState(() {
-      todayEntries.addAll(entriesToAdd);
+      todayEntries.add(entry);
       selectedIndex = 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${meal.name} dodan za odabrani datum'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     });
 
     await StorageService.saveTodayEntries(todayEntries);
+  }
+
+  Future<void> openEditMealScreen(MealTemplate meal) async {
+    final canEditWithCurrentScreen = meal.items.every(
+          (item) => foods.any((food) => food.id == item.food.id),
+    );
+
+    if (!canEditWithCurrentScreen) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ovaj obrok je ručno unesen. Uređivanje ručnih obroka dodat ćemo zasebno.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddMealScreen(
+          foods: foods,
+          existingMeal: meal,
+        ),
+      ),
+    );
+
+    if (result != null && result is MealTemplate) {
+      final index = meals.indexWhere((item) => item.id == meal.id);
+
+      if (index != -1) {
+        setState(() {
+          meals[index] = result;
+          selectedIndex = 2;
+        });
+
+        await StorageService.saveMeals(meals);
+      }
+    }
   }
 
   Future<void> openEditFoodScreen(FoodItem food) async {
@@ -385,6 +477,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         meals: meals,
         onAddMealToToday: addMealToToday,
         onDeleteMeal: deleteMeal,
+        onEditMeal: openEditMealScreen,
       ),
       TodayScreen(
         entries: todaysEntries,

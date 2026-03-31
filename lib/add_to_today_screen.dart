@@ -42,6 +42,25 @@ class _AddToTodayScreenState extends State<AddToTodayScreen> {
     return '${date.year}-$month-$day';
   }
 
+  double _parseBaseUnit(String baseUnit) {
+    final digits = RegExp(r'(\d+)').firstMatch(baseUnit);
+    if (digits != null) {
+      return double.tryParse(digits.group(1)!) ?? 100;
+    }
+
+    if (baseUnit == 'kom' || baseUnit == 'mjerica' || baseUnit == 'porcija') {
+      return 1;
+    }
+
+    return 100;
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
+  }
+
   Future<void> pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -67,11 +86,23 @@ class _AddToTodayScreenState extends State<AddToTodayScreen> {
       return;
     }
 
+    final base = _parseBaseUnit(widget.food.baseUnit);
+
+    final protein = widget.food.protein * amount / base;
+    final carbs = widget.food.carbs * amount / base;
+    final fat = widget.food.fat * amount / base;
+    final calories = widget.food.calories * amount / base;
+
     final entry = DailyFoodEntry(
-      id: generateId(),
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
       food: widget.food,
       amount: amount,
-      date: formatDate(selectedDate),
+      date: _formatDate(selectedDate),
+      protein: protein,
+      carbs: carbs,
+      fat: fat,
+      calories: calories,
+      isMeal: false,
     );
 
     Navigator.pop(context, entry);

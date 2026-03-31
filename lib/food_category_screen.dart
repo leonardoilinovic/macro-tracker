@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
-import 'models/meal_template.dart';
+import 'models/food_item.dart';
 
-class MealsScreen extends StatefulWidget {
-  final List<MealTemplate> meals;
-  final void Function(MealTemplate meal) onAddMealToToday;
-  final void Function(MealTemplate meal) onDeleteMeal;
-  final void Function(MealTemplate meal) onEditMeal;
+class FoodCategoryScreen extends StatefulWidget {
+  final String categoryName;
+  final List<FoodItem> foods;
+  final void Function(FoodItem food) onFoodTap;
+  final void Function(FoodItem food) onDeleteFood;
+  final void Function(FoodItem food) onEditFood;
 
-  const MealsScreen({
+  const FoodCategoryScreen({
     super.key,
-    required this.meals,
-    required this.onAddMealToToday,
-    required this.onDeleteMeal,
-    required this.onEditMeal,
+    required this.categoryName,
+    required this.foods,
+    required this.onFoodTap,
+    required this.onDeleteFood,
+    required this.onEditFood,
   });
 
   @override
-  State<MealsScreen> createState() => _MealsScreenState();
+  State<FoodCategoryScreen> createState() => _FoodCategoryScreenState();
 }
 
-class _MealsScreenState extends State<MealsScreen> {
+class _FoodCategoryScreenState extends State<FoodCategoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -29,13 +31,17 @@ class _MealsScreenState extends State<MealsScreen> {
     super.dispose();
   }
 
-  List<MealTemplate> get filteredMeals {
-    if (_searchQuery.trim().isEmpty) return widget.meals;
+  List<FoodItem> get filteredFoods {
+    final categoryFoods = widget.foods
+        .where((food) => food.category == widget.categoryName)
+        .toList();
+
+    if (_searchQuery.trim().isEmpty) return categoryFoods;
 
     final query = _searchQuery.toLowerCase().trim();
 
-    return widget.meals.where((meal) {
-      return meal.name.toLowerCase().contains(query);
+    return categoryFoods.where((food) {
+      return food.name.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -64,7 +70,7 @@ class _MealsScreenState extends State<MealsScreen> {
     );
   }
 
-  Widget _buildMealCard(MealTemplate meal) {
+  Widget _buildFoodCard(FoodItem food) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Card(
@@ -74,7 +80,9 @@ class _MealsScreenState extends State<MealsScreen> {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => widget.onAddMealToToday(meal),
+          onTap: () {
+            Navigator.pop(context, food);
+          },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -86,15 +94,15 @@ class _MealsScreenState extends State<MealsScreen> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: Colors.blueGrey.shade50,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.restaurant_menu),
+                      child: const Icon(Icons.fastfood),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        meal.name,
+                        food.name,
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
@@ -103,17 +111,17 @@ class _MealsScreenState extends State<MealsScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => widget.onEditMeal(meal),
+                      onPressed: () => widget.onEditFood(food),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () => widget.onDeleteMeal(meal),
+                      onPressed: () => widget.onDeleteFood(food),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(
-                  '${meal.items.length} stavki u obroku',
+                  'Vrijednosti po ${food.baseUnit}',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.grey.shade700,
@@ -124,33 +132,11 @@ class _MealsScreenState extends State<MealsScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _macroChip('P', _formatNum(meal.protein)),
-                    _macroChip('UH', _formatNum(meal.carbs)),
-                    _macroChip('M', _formatNum(meal.fat)),
-                    _macroChip('kcal', _formatNum(meal.calories)),
+                    _macroChip('P', _formatNum(food.protein)),
+                    _macroChip('UH', _formatNum(food.carbs)),
+                    _macroChip('M', _formatNum(food.fat)),
+                    _macroChip('kcal', _formatNum(food.calories)),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_circle_outline, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Dodirni za dodavanje u danas',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -162,11 +148,14 @@ class _MealsScreenState extends State<MealsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final meals = filteredMeals;
+    final foods = filteredFoods;
+    final totalInCategory = widget.foods
+        .where((food) => food.category == widget.categoryName)
+        .length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Obroci'),
+        title: Text(widget.categoryName),
         centerTitle: true,
       ),
       body: Column(
@@ -181,7 +170,7 @@ class _MealsScreenState extends State<MealsScreen> {
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Pretraži obroke...',
+                hintText: 'Pretraži unutar kategorije...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isEmpty
                     ? null
@@ -201,14 +190,14 @@ class _MealsScreenState extends State<MealsScreen> {
             ),
           ),
           Expanded(
-            child: widget.meals.isEmpty
+            child: totalInCategory == 0
                 ? const Center(
               child: Text(
-                'Još nema spremljenih obroka.',
+                'Još nema namirnica u ovoj kategoriji.',
                 style: TextStyle(fontSize: 16),
               ),
             )
-                : meals.isEmpty
+                : foods.isEmpty
                 ? const Center(
               child: Text(
                 'Nema rezultata za ovu pretragu.',
@@ -217,10 +206,10 @@ class _MealsScreenState extends State<MealsScreen> {
             )
                 : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-              itemCount: meals.length,
+              itemCount: foods.length,
               itemBuilder: (context, index) {
-                final meal = meals[index];
-                return _buildMealCard(meal);
+                final food = foods[index];
+                return _buildFoodCard(food);
               },
             ),
           ),

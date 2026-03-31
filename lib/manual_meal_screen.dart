@@ -30,16 +30,46 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
     return DateTime.now().microsecondsSinceEpoch.toString();
   }
 
+  double? _parseRequiredNumber(String value) {
+    final cleaned = value.trim().replaceAll(',', '.');
+    if (cleaned.isEmpty) return null;
+    return double.tryParse(cleaned);
+  }
+
   void saveManualMeal() {
     final name = nameController.text.trim();
-    final protein = double.tryParse(proteinController.text.trim()) ?? 0;
-    final carbs = double.tryParse(carbsController.text.trim()) ?? 0;
-    final fat = double.tryParse(fatController.text.trim()) ?? 0;
-    final calories = double.tryParse(caloriesController.text.trim()) ?? 0;
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Upiši naziv obroka.')),
+      );
+      return;
+    }
+
+    final protein = _parseRequiredNumber(proteinController.text);
+    final carbs = _parseRequiredNumber(carbsController.text);
+    final fat = _parseRequiredNumber(fatController.text);
+    final calories = _parseRequiredNumber(caloriesController.text);
+
+    if (protein == null ||
+        carbs == null ||
+        fat == null ||
+        calories == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unesi proteine, UH, masti i kalorije prije spremanja obroka.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (protein < 0 || carbs < 0 || fat < 0 || calories < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vrijednosti ne mogu biti negativne.'),
+        ),
       );
       return;
     }
@@ -52,6 +82,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
       fat: fat,
       calories: calories,
       baseUnit: 'porcija',
+      category: 'Ostalo',
     );
 
     final meal = MealTemplate(
@@ -91,6 +122,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Proteini za 1 porciju',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -100,6 +132,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'UH za 1 porciju',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -109,6 +142,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Masti za 1 porciju',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -118,6 +152,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Kalorije za 1 porciju',
+                hintText: 'Obavezno polje',
                 border: OutlineInputBorder(),
               ),
             ),
