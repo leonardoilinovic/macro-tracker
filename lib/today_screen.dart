@@ -125,35 +125,67 @@ class TodayScreen extends StatelessWidget {
   double _totalFat() => entries.fold(0, (sum, e) => sum + e.fat);
   double _totalCalories() => entries.fold(0, (sum, e) => sum + e.calories);
 
+  _RangeStatus _buildRangeStatus({
+    required double actual,
+    required double min,
+    required double max,
+    required String unit,
+  }) {
+    final hasGoal = min > 0 || max > 0;
+
+    if (!hasGoal) {
+      return _RangeStatus(
+        color: Colors.grey,
+        progress: 0,
+        helperText: 'Cilj nije postavljen',
+        rangeText: '—',
+      );
+    }
+
+    final safeMax = max <= 0 ? min : max;
+    final progress = safeMax > 0 ? (actual / safeMax).clamp(0.0, 1.0) : 0.0;
+    final rangeText = '${_formatNum(min)}–${_formatNum(max)} $unit';
+
+    if (actual < min) {
+      return _RangeStatus(
+        color: Colors.orange,
+        progress: progress,
+        helperText: 'Preostalo do cilja: ${_formatNum(min - actual)} $unit',
+        rangeText: rangeText,
+      );
+    }
+
+    if (actual <= max) {
+      return _RangeStatus(
+        color: Colors.green,
+        progress: progress,
+        helperText: 'U ciljanom rasponu si',
+        rangeText: rangeText,
+      );
+    }
+
+    return _RangeStatus(
+      color: Colors.red,
+      progress: progress,
+      helperText: 'Prešao si za ${_formatNum(actual - max)} $unit',
+      rangeText: rangeText,
+    );
+  }
+
   Widget _buildMacroCard({
     required String title,
     required double actual,
-    required double target,
+    required double min,
+    required double max,
     required String unit,
     required IconData icon,
   }) {
-    final difference = target - actual;
-    final isOver = actual > target;
-    final hasGoal = target > 0;
-
-    final color = !hasGoal
-        ? Colors.grey
-        : isOver
-        ? Colors.red
-        : Colors.green;
-
-    final progress = hasGoal ? (actual / target).clamp(0.0, 1.0) : 0.0;
-
-    String helperText;
-    if (!hasGoal) {
-      helperText = 'Cilj nije postavljen';
-    } else if (difference > 0) {
-      helperText = 'Preostalo: ${_formatNum(difference)} $unit';
-    } else if (difference < 0) {
-      helperText = 'Prešao si za ${_formatNum(difference.abs())} $unit';
-    } else {
-      helperText = 'Točno pogođen cilj';
-    }
+    final status = _buildRangeStatus(
+      actual: actual,
+      min: min,
+      max: max,
+      unit: unit,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -178,11 +210,23 @@ class TodayScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  '${_formatNum(actual)} / ${_formatNum(target)} $unit',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${_formatNum(actual)} $unit',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      status.rangeText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -191,16 +235,16 @@ class TodayScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 minHeight: 10,
-                value: progress,
-                color: color,
+                value: status.progress,
+                color: status.color,
                 backgroundColor: Colors.grey.shade300,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              helperText,
+              status.helperText,
               style: TextStyle(
-                color: color,
+                color: status.color,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -311,28 +355,32 @@ class TodayScreen extends StatelessWidget {
           _buildMacroCard(
             title: 'Proteini',
             actual: totalProtein,
-            target: goals.proteinGoal,
+            min: goals.proteinMin,
+            max: goals.proteinMax,
             unit: 'g',
             icon: Icons.fitness_center,
           ),
           _buildMacroCard(
             title: 'UH',
             actual: totalCarbs,
-            target: goals.carbsGoal,
+            min: goals.carbsMin,
+            max: goals.carbsMax,
             unit: 'g',
             icon: Icons.rice_bowl,
           ),
           _buildMacroCard(
             title: 'Masti',
             actual: totalFat,
-            target: goals.fatGoal,
+            min: goals.fatMin,
+            max: goals.fatMax,
             unit: 'g',
             icon: Icons.opacity,
           ),
           _buildMacroCard(
             title: 'Kalorije',
             actual: totalCalories,
-            target: goals.caloriesGoal,
+            min: goals.caloriesMin,
+            max: goals.caloriesMax,
             unit: 'kcal',
             icon: Icons.local_fire_department,
           ),
@@ -455,4 +503,18 @@ class _EditAmountDialogState extends State<_EditAmountDialog> {
       ],
     );
   }
+}
+
+class _RangeStatus {
+  final Color color;
+  final double progress;
+  final String helperText;
+  final String rangeText;
+
+  const _RangeStatus({
+    required this.color,
+    required this.progress,
+    required this.helperText,
+    required this.rangeText,
+  });
 }
