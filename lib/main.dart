@@ -446,22 +446,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return '${now.year}-$month-$day';
   }
 
-  List<DailyFoodEntry> get todaysEntries {
+  List<DailyFoodEntry> get homeEntries {
+    final todayString = todayDateString();
+    return todayEntries.where((entry) => entry.date == todayString).toList();
+  }
+
+  List<DailyFoodEntry> get diaryEntries {
     final selectedDateString = formatDate(selectedDate);
     return todayEntries.where((entry) => entry.date == selectedDateString).toList();
   }
 
-  double get totalProtein =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.protein);
-
-  double get totalCarbs =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.carbs);
-
-  double get totalFat =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.fat);
-
-  double get totalCalories =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.calories);
+  double get homeProtein => homeEntries.fold(0, (sum, entry) => sum + entry.protein);
+  double get homeCarbs => homeEntries.fold(0, (sum, entry) => sum + entry.carbs);
+  double get homeFat => homeEntries.fold(0, (sum, entry) => sum + entry.fat);
+  double get homeCalories => homeEntries.fold(0, (sum, entry) => sum + entry.calories);
 
   @override
   Widget build(BuildContext context) {
@@ -476,10 +474,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onAddFood: openAddFoodScreen,
         onAddMeal: openAddMealScreen,
         onOpenGoals: openGoalsScreen,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fat: totalFat,
-        calories: totalCalories,
+        protein: homeProtein,
+        carbs: homeCarbs,
+        fat: homeFat,
+        calories: homeCalories,
         goals: goals,
       ),
       FoodsScreen(
@@ -496,13 +494,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onEditMeal: openEditMealScreen,
       ),
       TodayScreen(
-        entries: todaysEntries,
+        entries: diaryEntries,
         onDeleteEntry: deleteTodayEntry,
         selectedDate: selectedDate,
         onPickDate: pickSelectedDate,
+        goals: goals,
       ),
+
       HistoryScreen(
         allEntries: todayEntries,
+        goals: goals,
       ),
     ];
 
@@ -532,14 +533,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Obroci',
           ),
           NavigationDestination(
-            icon: Icon(Icons.today_outlined),
-            selectedIcon: Icon(Icons.today),
-            label: 'Danas',
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Dnevnik',
           ),
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Povijest',
+            icon: Icon(Icons.show_chart_outlined),
+            selectedIcon: Icon(Icons.show_chart),
+            label: 'Trendovi',
           ),
         ],
       ),
@@ -581,13 +582,7 @@ class HomeTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             const SizedBox(height: 8),
-            DailySummaryCard(
-              protein: protein,
-              carbs: carbs,
-              fat: fat,
-              calories: calories,
-            ),
-            const SizedBox(height: 16),
+
             GoalsOverviewCard(
               goals: goals,
               protein: protein,
@@ -736,7 +731,7 @@ class GoalsOverviewCard extends StatelessWidget {
               children: [
                 const Expanded(
                   child: Text(
-                    'Ciljevi',
+                    'Danas',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -745,7 +740,7 @@ class GoalsOverviewCard extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: onEditGoals,
-                  child: const Text('Uredi'),
+                  child: const Text('Uredi ciljeve'),
                 ),
               ],
             ),
