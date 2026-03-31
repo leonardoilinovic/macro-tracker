@@ -6,6 +6,7 @@ class FoodItem {
   final double fat;
   final double calories;
   final String baseUnit;
+  final String category;
 
   FoodItem({
     required this.id,
@@ -15,6 +16,7 @@ class FoodItem {
     required this.fat,
     required this.calories,
     required this.baseUnit,
+    required this.category,
   });
 
   Map<String, dynamic> toJson() {
@@ -26,6 +28,7 @@ class FoodItem {
       'fat': fat,
       'calories': calories,
       'baseUnit': baseUnit,
+      'category': category,
     };
   }
 
@@ -38,6 +41,7 @@ class FoodItem {
       fat: (json['fat'] as num).toDouble(),
       calories: (json['calories'] as num).toDouble(),
       baseUnit: json['baseUnit'],
+      category: json['category'] ?? 'Ostalo',
     );
   }
 }
