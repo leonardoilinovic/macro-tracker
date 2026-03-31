@@ -260,31 +260,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return 100;
   }
 
-  void addMealToToday(MealTemplate meal) async {
+  void addMealToToday(MealTemplate meal, double quantity) async {
     final selectedDateString = formatDate(selectedDate);
+
+    final scaledProtein = meal.protein * quantity;
+    final scaledCarbs = meal.carbs * quantity;
+    final scaledFat = meal.fat * quantity;
+    final scaledCalories = meal.calories * quantity;
 
     final mealFood = FoodItem(
       id: 'meal_${meal.id}',
       name: meal.name,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      calories: meal.calories,
+      protein: scaledProtein,
+      carbs: scaledCarbs,
+      fat: scaledFat,
+      calories: scaledCalories,
       baseUnit: 'porcija',
       category: 'Ostalo',
     );
 
     final mealItems = meal.items.map((item) {
       final base = _parseBaseUnit(item.food.baseUnit);
+      final scaledAmount = item.amount * quantity;
 
-      final itemProtein = item.food.protein * item.amount / base;
-      final itemCarbs = item.food.carbs * item.amount / base;
-      final itemFat = item.food.fat * item.amount / base;
-      final itemCalories = item.food.calories * item.amount / base;
+      final itemProtein = item.food.protein * scaledAmount / base;
+      final itemCarbs = item.food.carbs * scaledAmount / base;
+      final itemFat = item.food.fat * scaledAmount / base;
+      final itemCalories = item.food.calories * scaledAmount / base;
 
       return {
         'name': item.food.name,
-        'amount': item.amount,
+        'amount': scaledAmount,
         'baseUnit': item.food.baseUnit,
         'protein': itemProtein,
         'carbs': itemCarbs,
@@ -296,12 +302,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final entry = DailyFoodEntry(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       food: mealFood,
-      amount: 1,
+      amount: quantity,
       date: selectedDateString,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      calories: meal.calories,
+      protein: scaledProtein,
+      carbs: scaledCarbs,
+      fat: scaledFat,
+      calories: scaledCalories,
       isMeal: true,
       mealName: meal.name,
       mealItems: mealItems,
@@ -310,16 +316,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() {
       todayEntries.add(entry);
       selectedIndex = 0;
+    });
+
+    await StorageService.saveTodayEntries(todayEntries);
+
+    if (!mounted) return;
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${meal.name} dodan za odabrani datum'),
+          content: Text(
+            '${meal.name} dodan (${quantity.toString().replaceAll('.0', '')} porcija)',
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
     });
-
-    await StorageService.saveTodayEntries(todayEntries);
   }
+
 
   Future<void> openEditMealScreen(MealTemplate meal) async {
     final canEditWithCurrentScreen = meal.items.every(
@@ -423,6 +439,81 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     await StorageService.saveTodayEntries(todayEntries);
   }
 
+  Future<void> editTodayEntryAmount(
+      DailyFoodEntry entry,
+      double newAmount,
+      ) async {
+    if (newAmount <= 0) return;
+
+    final factor = newAmount / entry.amount;
+
+    final updatedMealItems = entry.mealItems?.map((item) {
+      return {
+        'name': item['name'],
+        'amount': ((item['amount'] as num).toDouble()) * factor,
+        'baseUnit': item['baseUnit'],
+        'protein': ((item['protein'] as num).toDouble()) * factor,
+        'carbs': ((item['carbs'] as num).toDouble()) * factor,
+        'fat': ((item['fat'] as num).toDouble()) * factor,
+        'calories': ((item['calories'] as num).toDouble()) * factor,
+      };
+    }).toList();
+
+    final updatedFood = entry.isMeal
+        ? FoodItem(
+      id: entry.food.id,
+      name: entry.food.name,
+      protein: entry.food.protein * factor,
+      carbs: entry.food.carbs * factor,
+      fat: entry.food.fat * factor,
+      calories: entry.food.calories * factor,
+      baseUnit: entry.food.baseUnit,
+      category: entry.food.category,
+    )
+        : FoodItem(
+      id: entry.food.id,
+      name: entry.food.name,
+      protein: entry.food.protein,
+      carbs: entry.food.carbs,
+      fat: entry.food.fat,
+      calories: entry.food.calories,
+      baseUnit: entry.food.baseUnit,
+      category: entry.food.category,
+    );
+
+    final updatedEntry = DailyFoodEntry(
+      id: entry.id,
+      food: updatedFood,
+      amount: newAmount,
+      date: entry.date,
+      protein: entry.protein * factor,
+      carbs: entry.carbs * factor,
+      fat: entry.fat * factor,
+      calories: entry.calories * factor,
+      isMeal: entry.isMeal,
+      mealName: entry.mealName,
+      mealItems: updatedMealItems,
+    );
+
+    final index = todayEntries.indexWhere((e) => e.id == entry.id);
+    if (index == -1) return;
+
+    setState(() {
+      todayEntries[index] = updatedEntry;
+    });
+
+    await StorageService.saveTodayEntries(todayEntries);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Količina je ažurirana.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   String todayDateString() {
     final now = DateTime.now();
     final month = now.month.toString().padLeft(2, '0');
@@ -430,22 +521,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return '${now.year}-$month-$day';
   }
 
-  List<DailyFoodEntry> get todaysEntries {
+  List<DailyFoodEntry> get homeEntries {
+    final todayString = todayDateString();
+    return todayEntries.where((entry) => entry.date == todayString).toList();
+  }
+
+  List<DailyFoodEntry> get diaryEntries {
     final selectedDateString = formatDate(selectedDate);
     return todayEntries.where((entry) => entry.date == selectedDateString).toList();
   }
 
-  double get totalProtein =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.protein);
-
-  double get totalCarbs =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.carbs);
-
-  double get totalFat =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.fat);
-
-  double get totalCalories =>
-      todaysEntries.fold(0, (sum, entry) => sum + entry.calories);
+  double get homeProtein => homeEntries.fold(0, (sum, entry) => sum + entry.protein);
+  double get homeCarbs => homeEntries.fold(0, (sum, entry) => sum + entry.carbs);
+  double get homeFat => homeEntries.fold(0, (sum, entry) => sum + entry.fat);
+  double get homeCalories => homeEntries.fold(0, (sum, entry) => sum + entry.calories);
 
   @override
   Widget build(BuildContext context) {
@@ -460,10 +549,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onAddFood: openAddFoodScreen,
         onAddMeal: openAddMealScreen,
         onOpenGoals: openGoalsScreen,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fat: totalFat,
-        calories: totalCalories,
+        protein: homeProtein,
+        carbs: homeCarbs,
+        fat: homeFat,
+        calories: homeCalories,
         goals: goals,
       ),
       FoodsScreen(
@@ -480,13 +569,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onEditMeal: openEditMealScreen,
       ),
       TodayScreen(
-        entries: todaysEntries,
+        entries: diaryEntries,
         onDeleteEntry: deleteTodayEntry,
+        onEditEntry: editTodayEntryAmount,
         selectedDate: selectedDate,
         onPickDate: pickSelectedDate,
+        goals: goals,
       ),
+
       HistoryScreen(
         allEntries: todayEntries,
+        goals: goals,
       ),
     ];
 
@@ -516,14 +609,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Obroci',
           ),
           NavigationDestination(
-            icon: Icon(Icons.today_outlined),
-            selectedIcon: Icon(Icons.today),
-            label: 'Danas',
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Dnevnik',
           ),
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Povijest',
+            icon: Icon(Icons.show_chart_outlined),
+            selectedIcon: Icon(Icons.show_chart),
+            label: 'Trendovi',
           ),
         ],
       ),
@@ -553,56 +646,130 @@ class HomeTab extends StatelessWidget {
     required this.goals,
   });
 
+  String _todayLabel() {
+    final now = DateTime.now();
+    return '${now.day}.${now.month}.${now.year}.';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Macro Tracker'),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SizedBox(height: 8),
-            DailySummaryCard(
-              protein: protein,
-              carbs: carbs,
-              fat: fat,
-              calories: calories,
-            ),
-            const SizedBox(height: 16),
-            GoalsOverviewCard(
-              goals: goals,
-              protein: protein,
-              carbs: carbs,
-              fat: fat,
-              calories: calories,
-              onEditGoals: onOpenGoals,
-            ),
-            const SizedBox(height: 20),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.2,
-              children: [
-                ActionCard(
-                  title: 'Dodaj namirnicu',
-                  icon: Icons.fastfood,
-                  onTap: onAddFood,
-                ),
-                ActionCard(
-                  title: 'Dodaj obrok',
-                  icon: Icons.restaurant_menu,
-                  onTap: onAddMeal,
-                ),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.orange.shade400,
+                Colors.orange.shade600,
               ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 24),
-          ],
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Macro Tracker',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Današnji pregled',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _todayLabel(),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.fastfood,
+                      label: 'Dodaj namirnicu',
+                      onTap: onAddFood,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.restaurant_menu,
+                      label: 'Dodaj obrok',
+                      onTap: onAddMeal,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        GoalsOverviewCard(
+          goals: goals,
+          protein: protein,
+          carbs: carbs,
+          fat: fat,
+          calories: calories,
+          onEditGoals: onOpenGoals,
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.18),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Column(
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -699,71 +866,149 @@ class GoalsOverviewCard extends StatelessWidget {
     required this.onEditGoals,
   });
 
-  String remainingText(double current, double goal, String unit) {
-    if (goal <= 0) return 'Cilj nije postavljen';
-    final diff = goal - current;
-    if (diff > 0) {
-      return 'Preostalo: ${diff.toStringAsFixed(1)} $unit';
+  String _formatNum(double value) {
+    if (value == value.toInt()) {
+      return value.toInt().toString();
     }
-    return 'Prešao si za: ${(-diff).toStringAsFixed(1)} $unit';
+    return value.toStringAsFixed(1);
+  }
+
+  Widget _macroTile({
+    required String title,
+    required double actual,
+    required double target,
+    required String unit,
+  }) {
+    final difference = target - actual;
+    final isOver = actual > target;
+    final hasGoal = target > 0;
+
+    final color = !hasGoal
+        ? Colors.grey
+        : isOver
+        ? Colors.red
+        : Colors.green;
+
+    final progress = hasGoal ? (actual / target).clamp(0.0, 1.0) : 0.0;
+
+    String helperText;
+    if (!hasGoal) {
+      helperText = 'Cilj nije postavljen';
+    } else if (difference > 0) {
+      helperText = 'Preostalo: ${_formatNum(difference)} $unit';
+    } else if (difference < 0) {
+      helperText = 'Prešao si za ${_formatNum(difference.abs())} $unit';
+    } else {
+      helperText = 'Točno pogođen cilj';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                '${_formatNum(actual)} / ${_formatNum(target)} $unit',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 10,
+              value: progress,
+              color: color,
+              backgroundColor: Colors.grey.shade300,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            helperText,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 const Expanded(
                   child: Text(
-                    'Ciljevi',
+                    'Današnji status',
                     style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-                ElevatedButton(
+                TextButton.icon(
                   onPressed: onEditGoals,
-                  child: const Text('Uredi'),
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Ciljevi'),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            GoalRow(
+            const SizedBox(height: 8),
+            _macroTile(
               title: 'Proteini',
-              current: protein,
-              goal: goals.proteinGoal,
+              actual: protein,
+              target: goals.proteinGoal,
               unit: 'g',
-              helperText: remainingText(protein, goals.proteinGoal, 'g'),
             ),
-            const SizedBox(height: 10),
-            GoalRow(
+            _macroTile(
               title: 'UH',
-              current: carbs,
-              goal: goals.carbsGoal,
+              actual: carbs,
+              target: goals.carbsGoal,
               unit: 'g',
-              helperText: remainingText(carbs, goals.carbsGoal, 'g'),
             ),
-            const SizedBox(height: 10),
-            GoalRow(
+            _macroTile(
               title: 'Masti',
-              current: fat,
-              goal: goals.fatGoal,
+              actual: fat,
+              target: goals.fatGoal,
               unit: 'g',
-              helperText: remainingText(fat, goals.fatGoal, 'g'),
             ),
-            const SizedBox(height: 10),
-            GoalRow(
+            _macroTile(
               title: 'Kalorije',
-              current: calories,
-              goal: goals.caloriesGoal,
+              actual: calories,
+              target: goals.caloriesGoal,
               unit: 'kcal',
-              helperText: remainingText(calories, goals.caloriesGoal, 'kcal'),
             ),
           ],
         ),

@@ -3,7 +3,7 @@ import 'models/meal_template.dart';
 
 class MealsScreen extends StatefulWidget {
   final List<MealTemplate> meals;
-  final void Function(MealTemplate meal) onAddMealToToday;
+  final void Function(MealTemplate meal, double quantity) onAddMealToToday;
   final void Function(MealTemplate meal) onDeleteMeal;
   final void Function(MealTemplate meal) onEditMeal;
 
@@ -33,7 +33,6 @@ class _MealsScreenState extends State<MealsScreen> {
     if (_searchQuery.trim().isEmpty) return widget.meals;
 
     final query = _searchQuery.toLowerCase().trim();
-
     return widget.meals.where((meal) {
       return meal.name.toLowerCase().contains(query);
     }).toList();
@@ -64,6 +63,78 @@ class _MealsScreenState extends State<MealsScreen> {
     );
   }
 
+  Future<void> _showAddMealQuantityDialog(MealTemplate meal) async {
+    final quantity = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Dodaj "${meal.name}"'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(1.0),
+                    child: const Text('1 porcija'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(1.5),
+                    child: const Text('1.5 porcija'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(2.0),
+                    child: const Text('2 porcije'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(-1.0),
+                    child: const Text('Custom'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || quantity == null) return;
+
+    double? finalQuantity = quantity;
+
+    if (quantity == -1.0) {
+      finalQuantity = await _pickCustomQuantity();
+      if (!mounted || finalQuantity == null) return;
+    }
+
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    if (!mounted) return;
+    widget.onAddMealToToday(meal, finalQuantity);
+  }
+
+  Future<double?> _pickCustomQuantity() async {
+    return showDialog<double>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const _CustomQuantityDialog(),
+    );
+  }
+
   Widget _buildMealCard(MealTemplate meal) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -74,7 +145,7 @@ class _MealsScreenState extends State<MealsScreen> {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => widget.onAddMealToToday(meal),
+          onTap: () => _showAddMealQuantityDialog(meal),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -146,7 +217,7 @@ class _MealsScreenState extends State<MealsScreen> {
                       Icon(Icons.add_circle_outline, size: 18),
                       SizedBox(width: 8),
                       Text(
-                        'Dodirni za dodavanje u danas',
+                        'Dodirni za odabir količine',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -226,6 +297,84 @@ class _MealsScreenState extends State<MealsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomQuantityDialog extends StatefulWidget {
+  const _CustomQuantityDialog();
+
+  @override
+  State<_CustomQuantityDialog> createState() => _CustomQuantityDialogState();
+}
+
+class _CustomQuantityDialogState extends State<_CustomQuantityDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final raw = _controller.text.trim().replaceAll(',', '.');
+    final value = double.tryParse(raw);
+
+    if (value == null || value <= 0) {
+      setState(() {
+        _errorText = 'Unesi količinu veću od 0';
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Custom količina'),
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() {
+                _errorText = null;
+              });
+            }
+          },
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(
+            labelText: 'Količina',
+            hintText: 'npr. 2.2',
+            errorText: _errorText,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Odustani'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Dodaj'),
+        ),
+      ],
     );
   }
 }
