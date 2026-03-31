@@ -873,34 +873,66 @@ class GoalsOverviewCard extends StatelessWidget {
     return value.toStringAsFixed(1);
   }
 
+  _HomeRangeStatus _buildStatus({
+    required double actual,
+    required double min,
+    required double max,
+    required String unit,
+  }) {
+    final hasGoal = min > 0 || max > 0;
+
+    if (!hasGoal) {
+      return _HomeRangeStatus(
+        color: Colors.grey,
+        progress: 0,
+        helperText: 'Cilj nije postavljen',
+        rangeText: '—',
+      );
+    }
+
+    final safeMax = max <= 0 ? min : max;
+    final progress = safeMax > 0 ? (actual / safeMax).clamp(0.0, 1.0) : 0.0;
+    final rangeText = '${_formatNum(min)}–${_formatNum(max)} $unit';
+
+    if (actual < min) {
+      return _HomeRangeStatus(
+        color: Colors.orange,
+        progress: progress,
+        helperText: 'Preostalo do cilja: ${_formatNum(min - actual)} $unit',
+        rangeText: rangeText,
+      );
+    }
+
+    if (actual <= max) {
+      return _HomeRangeStatus(
+        color: Colors.green,
+        progress: progress,
+        helperText: 'U ciljanom rasponu si',
+        rangeText: rangeText,
+      );
+    }
+
+    return _HomeRangeStatus(
+      color: Colors.red,
+      progress: progress,
+      helperText: 'Prešao si za ${_formatNum(actual - max)} $unit',
+      rangeText: rangeText,
+    );
+  }
+
   Widget _macroTile({
     required String title,
     required double actual,
-    required double target,
+    required double min,
+    required double max,
     required String unit,
   }) {
-    final difference = target - actual;
-    final isOver = actual > target;
-    final hasGoal = target > 0;
-
-    final color = !hasGoal
-        ? Colors.grey
-        : isOver
-        ? Colors.red
-        : Colors.green;
-
-    final progress = hasGoal ? (actual / target).clamp(0.0, 1.0) : 0.0;
-
-    String helperText;
-    if (!hasGoal) {
-      helperText = 'Cilj nije postavljen';
-    } else if (difference > 0) {
-      helperText = 'Preostalo: ${_formatNum(difference)} $unit';
-    } else if (difference < 0) {
-      helperText = 'Prešao si za ${_formatNum(difference.abs())} $unit';
-    } else {
-      helperText = 'Točno pogođen cilj';
-    }
+    final status = _buildStatus(
+      actual: actual,
+      min: min,
+      max: max,
+      unit: unit,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -924,11 +956,21 @@ class GoalsOverviewCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                '${_formatNum(actual)} / ${_formatNum(target)} $unit',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${_formatNum(actual)} $unit',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    status.rangeText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -937,16 +979,16 @@ class GoalsOverviewCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               minHeight: 10,
-              value: progress,
-              color: color,
+              value: status.progress,
+              color: status.color,
               backgroundColor: Colors.grey.shade300,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            helperText,
+            status.helperText,
             style: TextStyle(
-              color: color,
+              color: status.color,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -989,25 +1031,29 @@ class GoalsOverviewCard extends StatelessWidget {
             _macroTile(
               title: 'Proteini',
               actual: protein,
-              target: goals.proteinGoal,
+              min: goals.proteinMin,
+              max: goals.proteinMax,
               unit: 'g',
             ),
             _macroTile(
               title: 'UH',
               actual: carbs,
-              target: goals.carbsGoal,
+              min: goals.carbsMin,
+              max: goals.carbsMax,
               unit: 'g',
             ),
             _macroTile(
               title: 'Masti',
               actual: fat,
-              target: goals.fatGoal,
+              min: goals.fatMin,
+              max: goals.fatMax,
               unit: 'g',
             ),
             _macroTile(
               title: 'Kalorije',
               actual: calories,
-              target: goals.caloriesGoal,
+              min: goals.caloriesMin,
+              max: goals.caloriesMax,
               unit: 'kcal',
             ),
           ],
@@ -1015,6 +1061,20 @@ class GoalsOverviewCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HomeRangeStatus {
+  final Color color;
+  final double progress;
+  final String helperText;
+  final String rangeText;
+
+  const _HomeRangeStatus({
+    required this.color,
+    required this.progress,
+    required this.helperText,
+    required this.rangeText,
+  });
 }
 
 class GoalRow extends StatelessWidget {

@@ -65,26 +65,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   int _hitGoalDays(List<_DayStats> stats) {
+    bool inRange(double value, double min, double max) {
+      final hasGoal = min > 0 || max > 0;
+      if (!hasGoal) return true;
+      return value >= min && value <= max;
+    }
+
     return stats.where((day) {
-      final proteinOk = widget.goals.proteinGoal <= 0
-          ? true
-          : day.protein >= widget.goals.proteinGoal * 0.9 &&
-          day.protein <= widget.goals.proteinGoal;
-
-      final carbsOk = widget.goals.carbsGoal <= 0
-          ? true
-          : day.carbs >= widget.goals.carbsGoal * 0.9 &&
-          day.carbs <= widget.goals.carbsGoal;
-
-      final fatOk = widget.goals.fatGoal <= 0
-          ? true
-          : day.fat >= widget.goals.fatGoal * 0.9 &&
-          day.fat <= widget.goals.fatGoal;
-
-      final caloriesOk = widget.goals.caloriesGoal <= 0
-          ? true
-          : day.calories >= widget.goals.caloriesGoal * 0.9 &&
-          day.calories <= widget.goals.caloriesGoal;
+      final proteinOk =
+      inRange(day.protein, widget.goals.proteinMin, widget.goals.proteinMax);
+      final carbsOk =
+      inRange(day.carbs, widget.goals.carbsMin, widget.goals.carbsMax);
+      final fatOk = inRange(day.fat, widget.goals.fatMin, widget.goals.fatMax);
+      final caloriesOk = inRange(
+        day.calories,
+        widget.goals.caloriesMin,
+        widget.goals.caloriesMax,
+      );
 
       return proteinOk && carbsOk && fatOk && caloriesOk;
     }).length;
@@ -277,8 +274,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             )
           else
             ...visibleDays.map((day) {
-              final overCalories = widget.goals.caloriesGoal > 0 &&
-                  day.calories > widget.goals.caloriesGoal;
+              final overCalories = widget.goals.caloriesMax > 0 &&
+                  day.calories > widget.goals.caloriesMax;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -306,6 +303,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           overCalories ? FontWeight.w700 : FontWeight.normal,
                         ),
                       ),
+                      if (widget.goals.caloriesMin > 0 || widget.goals.caloriesMax > 0)
+                        Text(
+                          'Cilj: ${_formatNum(widget.goals.caloriesMin)}–${_formatNum(widget.goals.caloriesMax)} kcal',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
                     ],
                   ),
                 ),
