@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'models/daily_food_entry.dart';
 import 'models/macro_goals.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   final List<DailyFoodEntry> allEntries;
   final MacroGoals goals;
 
@@ -11,6 +11,13 @@ class HistoryScreen extends StatelessWidget {
     required this.allEntries,
     required this.goals,
   });
+
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  int selectedRange = 7;
 
   String _formatNum(double value) {
     if (value == value.toInt()) {
@@ -28,7 +35,7 @@ class HistoryScreen extends StatelessWidget {
 
   Map<String, List<DailyFoodEntry>> _groupByDate() {
     final map = <String, List<DailyFoodEntry>>{};
-    for (final entry in allEntries) {
+    for (final entry in widget.allEntries) {
       map.putIfAbsent(entry.date, () => []).add(entry);
     }
     return map;
@@ -36,6 +43,7 @@ class HistoryScreen extends StatelessWidget {
 
   List<_DayStats> _buildStats() {
     final grouped = _groupByDate();
+
     final stats = grouped.entries.map((entry) {
       final protein = entry.value.fold<double>(0, (sum, e) => sum + e.protein);
       final carbs = entry.value.fold<double>(0, (sum, e) => sum + e.carbs);
@@ -58,48 +66,67 @@ class HistoryScreen extends StatelessWidget {
 
   int _hitGoalDays(List<_DayStats> stats) {
     return stats.where((day) {
-      final proteinOk = goals.proteinGoal <= 0
+      final proteinOk = widget.goals.proteinGoal <= 0
           ? true
-          : day.protein >= goals.proteinGoal * 0.9 &&
-          day.protein <= goals.proteinGoal;
-      final carbsOk = goals.carbsGoal <= 0
+          : day.protein >= widget.goals.proteinGoal * 0.9 &&
+          day.protein <= widget.goals.proteinGoal;
+
+      final carbsOk = widget.goals.carbsGoal <= 0
           ? true
-          : day.carbs >= goals.carbsGoal * 0.9 &&
-          day.carbs <= goals.carbsGoal;
-      final fatOk = goals.fatGoal <= 0
+          : day.carbs >= widget.goals.carbsGoal * 0.9 &&
+          day.carbs <= widget.goals.carbsGoal;
+
+      final fatOk = widget.goals.fatGoal <= 0
           ? true
-          : day.fat >= goals.fatGoal * 0.9 && day.fat <= goals.fatGoal;
-      final caloriesOk = goals.caloriesGoal <= 0
+          : day.fat >= widget.goals.fatGoal * 0.9 &&
+          day.fat <= widget.goals.fatGoal;
+
+      final caloriesOk = widget.goals.caloriesGoal <= 0
           ? true
-          : day.calories >= goals.caloriesGoal * 0.9 &&
-          day.calories <= goals.caloriesGoal;
+          : day.calories >= widget.goals.caloriesGoal * 0.9 &&
+          day.calories <= widget.goals.caloriesGoal;
 
       return proteinOk && carbsOk && fatOk && caloriesOk;
     }).length;
   }
 
+  Widget _rangeChip(int days) {
+    final isSelected = selectedRange == days;
+
+    return ChoiceChip(
+      label: Text('$days dana'),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() {
+          selectedRange = days;
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stats = _buildStats();
-    final latest7 = stats.take(7).toList();
-    final recentDays = stats.take(14).toList();
+    final visibleDays = stats.take(selectedRange).toList();
 
-    final averageCalories = latest7.isEmpty
+    final averageCalories = visibleDays.isEmpty
         ? 0.0
-        : latest7.fold<double>(0, (sum, d) => sum + d.calories) / latest7.length;
+        : visibleDays.fold<double>(0, (sum, d) => sum + d.calories) /
+        visibleDays.length;
 
-    final averageProtein = latest7.isEmpty
+    final averageProtein = visibleDays.isEmpty
         ? 0.0
-        : latest7.fold<double>(0, (sum, d) => sum + d.protein) / latest7.length;
+        : visibleDays.fold<double>(0, (sum, d) => sum + d.protein) /
+        visibleDays.length;
 
-    final maxCalories = latest7.isEmpty
+    final maxCalories = visibleDays.isEmpty
         ? 1.0
-        : latest7
+        : visibleDays
         .map((d) => d.calories)
         .reduce((a, b) => a > b ? a : b)
         .clamp(1.0, double.infinity);
 
-    final hitDays = _hitGoalDays(latest7);
+    final hitDays = _hitGoalDays(visibleDays);
 
     return Scaffold(
       appBar: AppBar(
@@ -109,15 +136,25 @@ class HistoryScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _rangeChip(7),
+              _rangeChip(14),
+              _rangeChip(30),
+            ],
+          ),
+          const SizedBox(height: 14),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Zadnjih 7 dana',
-                    style: TextStyle(
+                  Text(
+                    'Sažetak za zadnjih $selectedRange dana',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -143,7 +180,7 @@ class HistoryScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   _MiniStatCard(
                     title: 'Dani pogođenog cilja',
-                    value: '$hitDays / ${latest7.length}',
+                    value: '$hitDays / ${visibleDays.length}',
                   ),
                 ],
               ),
@@ -164,7 +201,7 @@ class HistoryScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  if (latest7.isEmpty)
+                  if (visibleDays.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       child: Text('Nema dovoljno podataka za graf.'),
@@ -174,9 +211,9 @@ class HistoryScreen extends StatelessWidget {
                       height: 220,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        children: latest7.reversed.map((day) {
-                          final ratio = (day.calories / maxCalories)
-                              .clamp(0.0, 1.0);
+                        children: visibleDays.reversed.map((day) {
+                          final ratio =
+                          (day.calories / maxCalories).clamp(0.0, 1.0);
 
                           return Expanded(
                             child: Padding(
@@ -221,24 +258,15 @@ class HistoryScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Zadnjih 14 dana',
-            style: TextStyle(
+          Text(
+            'Pregled za zadnjih $selectedRange dana',
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Prikazujemo samo najnovije dane radi preglednosti.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
           const SizedBox(height: 12),
-          const SizedBox(height: 12),
-          if (stats.isEmpty)
+          if (visibleDays.isEmpty)
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(20),
@@ -248,9 +276,9 @@ class HistoryScreen extends StatelessWidget {
               ),
             )
           else
-            ...recentDays.map((day) {
-              final overCalories =
-                  goals.caloriesGoal > 0 && day.calories > goals.caloriesGoal;
+            ...visibleDays.map((day) {
+              final overCalories = widget.goals.caloriesGoal > 0 &&
+                  day.calories > widget.goals.caloriesGoal;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -283,6 +311,16 @@ class HistoryScreen extends StatelessWidget {
                 ),
               );
             }),
+          if (stats.length > selectedRange) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Prikazujemo samo zadnjih $selectedRange dana radi preglednosti.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -5,6 +5,7 @@ import 'models/macro_goals.dart';
 class TodayScreen extends StatelessWidget {
   final List<DailyFoodEntry> entries;
   final void Function(DailyFoodEntry entry) onDeleteEntry;
+  final Future<void> Function(DailyFoodEntry entry, double newAmount) onEditEntry;
   final DateTime selectedDate;
   final VoidCallback onPickDate;
   final MacroGoals goals;
@@ -13,6 +14,7 @@ class TodayScreen extends StatelessWidget {
     super.key,
     required this.entries,
     required this.onDeleteEntry,
+    required this.onEditEntry,
     required this.selectedDate,
     required this.onPickDate,
     required this.goals,
@@ -23,6 +25,46 @@ class TodayScreen extends StatelessWidget {
       return value.toInt().toString();
     }
     return value.toStringAsFixed(1);
+  }
+
+  String _unitOnly(String baseUnit) {
+    final match = RegExp(r'^\s*[\d.,]+\s*([^\d\s].*|[A-Za-zčćžšđČĆŽŠĐ]+)\s*$')
+        .firstMatch(baseUnit);
+
+    if (match != null) {
+      return match.group(1)!.trim();
+    }
+
+    return baseUnit.trim();
+  }
+
+  String _formatAmountWithBaseUnit(double amount, String baseUnit) {
+    final match = RegExp(r'^\s*[\d.,]+\s*([^\d\s].*|[A-Za-zčćžšđČĆŽŠĐ]+)\s*$')
+        .firstMatch(baseUnit);
+
+    if (match != null) {
+      final unit = match.group(1)!.trim();
+      return '${_formatNum(amount)} $unit';
+    }
+
+    return '${_formatNum(amount)} $baseUnit';
+  }
+
+  Future<void> _showEditAmountDialog(
+      BuildContext context,
+      DailyFoodEntry entry,
+      ) async {
+    final result = await showDialog<double>(
+      context: context,
+      builder: (_) => _EditAmountDialog(
+        initialValue: entry.amount,
+        isMeal: entry.isMeal,
+        unitLabel: entry.isMeal ? 'porcija' : _unitOnly(entry.food.baseUnit),
+      ),
+    );
+
+    if (result == null) return;
+    await onEditEntry(entry, result);
   }
 
   void _showMealDetails(BuildContext context, DailyFoodEntry entry) {
@@ -193,8 +235,8 @@ class TodayScreen extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               entry.isMeal
-                  ? 'Količina: ${_formatNum(entry.amount)} porcija • Dodirni za detalje'
-                  : 'Količina: ${_formatNum(entry.amount)} ${entry.food.baseUnit}',
+                  ? 'Količina: ${_formatNum(entry.amount)} porcija'
+                  : 'Količina: ${_formatAmountWithBaseUnit(entry.amount, entry.food.baseUnit)}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade700,
@@ -203,9 +245,18 @@ class TodayScreen extends StatelessWidget {
           ],
         ),
         onTap: entry.isMeal ? () => _showMealDetails(context, entry) : null,
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline),
-          onPressed: () => onDeleteEntry(entry),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => _showEditAmountDialog(context, entry),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => onDeleteEntry(entry),
+            ),
+          ],
         ),
       ),
     );
@@ -306,6 +357,102 @@ class TodayScreen extends StatelessWidget {
             ...entries.map((entry) => _buildEntryCard(context, entry)),
         ],
       ),
+    );
+  }
+}
+
+class _EditAmountDialog extends StatefulWidget {
+  final double initialValue;
+  final bool isMeal;
+  final String unitLabel;
+
+  const _EditAmountDialog({
+    required this.initialValue,
+    required this.isMeal,
+    required this.unitLabel,
+  });
+
+  @override
+  State<_EditAmountDialog> createState() => _EditAmountDialogState();
+}
+
+class _EditAmountDialogState extends State<_EditAmountDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  String _initialText(double value) {
+    if (value == value.toInt()) {
+      return value.toInt().toString();
+    }
+    return value.toString();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: _initialText(widget.initialValue),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final raw = _controller.text.trim().replaceAll(',', '.');
+    final value = double.tryParse(raw);
+
+    if (value == null || value <= 0) {
+      setState(() {
+        _errorText = 'Unesi količinu veću od 0';
+      });
+      return;
+    }
+
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.isMeal
+            ? 'Uredi količinu obroka'
+            : 'Uredi količinu namirnice',
+      ),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textInputAction: TextInputAction.done,
+        onChanged: (_) {
+          if (_errorText != null) {
+            setState(() {
+              _errorText = null;
+            });
+          }
+        },
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(
+          labelText: 'Količina (${widget.unitLabel})',
+          hintText: 'npr. 150',
+          errorText: _errorText,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Odustani'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Spremi'),
+        ),
+      ],
     );
   }
 }
